@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landing Page</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            margin: 20px auto;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Conceptive AI</h1>
+        <p id="timer">Time remaining: 1:00</p>
+    </div>
+
+    <!-- Modal for Email Submission -->
+    <div class="modal fade" id="emailModal" tabindex="-1" role="dialog" aria-labelledby="emailModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="emailModalLabel">Enter Your Email</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form id="emailForm">
+                        <input type="email" id="email" class="form-control mb-3" placeholder="Enter your email" required>
+                        <button type="submit" class="btn btn-success">Submit Email</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Payment Confirmation -->
+    <div class="modal fade" id="paymentModal" tabindex="-1" role="dialog" aria-labelledby="paymentModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="paymentModalLabel">Payment Confirmation</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div id="payment-form">
+                        <div id="card-element"></div>
+                        <button id="submit-button" class="btn btn-success stripe-button">Pay $300</button>
+                        <p id="error-message"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
+
+    <script>
+        const emailForm = document.getElementById("emailForm");
+        const timerElement = document.getElementById("timer");
+        let timer = 60;
+        let emailSubmitted = false;
+        let useremail = "";
+
+        const stripe = Stripe('pk_test_51QWveJKQYw9PlfJFNn2BfY1mjXonH9iamythLVje2TBxPT7lBvMT3fPQZ82dJMcZLp4NhOtR1dcAYvaRTVv4EZ6G00pTi4k3xy'); // Stripe publishable key
+        const elements = stripe.elements();
+        const card = elements.create('card'); 
+        card.mount('#card-element');
+
+        const errorMessage = document.getElementById("error-message");
+
+        const countdown = setInterval(() => {
+            if (timer > 0) {
+                timer--;
+                let minutes = Math.floor(timer / 60);
+                let seconds = timer % 60;
+                timerElement.textContent = `Time remaining: ${minutes}:${seconds < 10 ? '0' + seconds : seconds}`;
+            }
+        }, 1000);
+
+        
+        setTimeout(() => {
+            if (!emailSubmitted) {
+                $('#emailModal').modal('show'); 
+            }
+        }, 30000);
+
+        
+        emailForm.addEventListener("submit", (e) => {
+            e.preventDefault();
+            const email = document.getElementById("email").value;
+
+            if (!email) {
+                alert("Please enter a valid email address.");
+                return;
+            }
+
+            useremail=email;
+
+            fetch('/collect-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data.message); 
+                emailSubmitted = true;
+                setTimeout(() => {
+                    $('#paymentModal').modal('show'); 
+                }, 30000); 
+            })
+            .catch(err => console.error('Failed to submit email:', err));
+        });
+
+        document.getElementById("submit-button").addEventListener("click", async (e) => {
+    e.preventDefault();
+
+    
+    const { token, error } = await stripe.createToken(card);
+
+    if (error) {
+        errorMessage.textContent = error.message;
+    } else {
+        fetch("/process-payment", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                token: token.id,
+                email: useremail
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("Payment successful!");
+            } else {
+                errorMessage.textContent = "Payment failed: " + data.message;
+            }
+        })
+        .catch(err => {
+            console.error("Payment failed:", err);
+            errorMessage.textContent = "Payment failed: " + err.message;
+        });
+    }
+});
+    </script>
+</body>
+</html>
